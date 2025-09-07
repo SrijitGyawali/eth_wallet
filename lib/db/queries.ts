@@ -27,6 +27,7 @@ import {
   type DBMessage,
   type Chat,
   stream,
+  wallet,
 } from './schema';
 import type { ArtifactKind } from '@/components/artifact';
 import { generateUUID } from '../utils';
@@ -534,5 +535,52 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
       'bad_request:database',
       'Failed to get stream ids by chat id',
     );
+  }
+}
+
+export async function getWalletByUserId({ userId }: { userId: string }) {
+  try {
+    const [row] = await db.select().from(wallet).where(eq(wallet.userId, userId));
+    return row ?? null;
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to get wallet by user id');
+  }
+}
+
+export async function saveWallet({
+  userId,
+  ethAddress,
+  encryptedPrivateKey,
+  iv,
+  tag,
+  salt,
+  kdf,
+  version,
+  createdAt,
+}: {
+  userId: string;
+  ethAddress: string;
+  encryptedPrivateKey: string;
+  iv: string;
+  tag: string;
+  salt: string;
+  kdf: string;
+  version: number;
+  createdAt: Date;
+}) {
+  try {
+    return await db.insert(wallet).values({
+      userId,
+      ethAddress,
+      encryptedPrivateKey,
+      iv,
+      tag,
+      salt,
+      kdf,
+      version,
+      createdAt,
+    });
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to save wallet');
   }
 }

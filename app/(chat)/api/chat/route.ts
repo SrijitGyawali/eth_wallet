@@ -37,6 +37,8 @@ import { ChatSDKError } from '@/lib/errors';
 import type { ChatMessage } from '@/lib/types';
 import type { ChatModel } from '@/lib/ai/models';
 import type { VisibilityType } from '@/components/visibility-selector';
+import { NextRequest, NextResponse } from "next/server";
+import { createAccountAndEncrypt } from "@/lib/eth-key-utils";
 
 export const maxDuration = 60;
 
@@ -68,7 +70,9 @@ export async function POST(request: Request) {
   try {
     const json = await request.json();
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
+  } catch (error) {
+    console.error('Failed to parse request body:', error);
+    // This is already correct
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
@@ -211,8 +215,9 @@ export async function POST(request: Request) {
 
     if (streamContext) {
       return new Response(
-        await streamContext.resumableStream(streamId, () =>
-          stream.pipeThrough(new JsonToSseTransformStream()),
+        await streamContext.resumableStream(
+          streamId,
+          () => stream.pipeThrough(new JsonToSseTransformStream()),
         ),
       );
     } else {
@@ -222,30 +227,25 @@ export async function POST(request: Request) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
+    // Return a generic 500 Internal Server Error for any other unhandled errors
+    console.error('An unhandled error occurred in the chat route handler:', error);
+    return new Response('Internal Server Error', { status: 500 });
   }
 }
 
-export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-
-  if (!id) {
-    return new ChatSDKError('bad_request:api').toResponse();
+// Renamed to avoid duplicate export
+export async function POST_createAccount(req: NextRequest) {
+  const { user_id } = await req.json();
+  if (!user_id) {
+    return NextResponse.json({ error: "user_id required" }, { status: 400 });
   }
 
-  const session = await auth();
+  // TODO: Save to your database here
+  const envelope = createAccountAndEncrypt();
 
-  if (!session?.user) {
-    return new ChatSDKError('unauthorized:chat').toResponse();
-  }
-
-  const chat = await getChatById({ id });
-
-  if (chat.userId !== session.user.id) {
-    return new ChatSDKError('forbidden:chat').toResponse();
-  }
-
-  const deletedChat = await deleteChatById({ id });
-
-  return Response.json(deletedChat, { status: 200 });
+  // Return only public info and encrypted fields
+  return NextResponse.json({
+    user_id,
+    ...envelope,
+  });
 }

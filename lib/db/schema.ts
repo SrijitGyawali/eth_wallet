@@ -9,6 +9,7 @@ import {
   primaryKey,
   foreignKey,
   boolean,
+  integer,
 } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('User', {
@@ -168,3 +169,21 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+// Wallets: one per user (enforced at API level); stores encrypted private key envelope
+export const wallet = pgTable('Wallet', {
+  userId: uuid('userId')
+    .primaryKey()
+    .notNull()
+    .references(() => user.id),
+  ethAddress: varchar('ethAddress', { length: 64 }).notNull(),
+  encryptedPrivateKey: text('encryptedPrivateKey').notNull(),
+  iv: varchar('iv', { length: 64 }).notNull(),
+  tag: varchar('tag', { length: 64 }).notNull(),
+  salt: varchar('salt', { length: 128 }).notNull(),
+  kdf: varchar('kdf', { length: 32 }).notNull().default('HKDF-SHA256'),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('createdAt').notNull(),
+});
+
+export type Wallet = InferSelectModel<typeof wallet>;
